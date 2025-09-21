@@ -1,0 +1,233 @@
+// package org.perf.core;
+
+// import static us.abstracta.jmeter.javadsl.JmeterDsl.*;
+
+// import org.perf.model.ExecutionResult;
+// import org.perf.model.TestStep;
+// import org.perf.builder.ThreadGroupBuilder;
+// import org.apache.http.entity.ContentType;
+
+// import us.abstracta.jmeter.javadsl.core.DslTestPlan;
+// import us.abstracta.jmeter.javadsl.core.TestPlanStats;
+// import us.abstracta.jmeter.javadsl.core.threadgroups.BaseThreadGroup;
+// import us.abstracta.jmeter.javadsl.http.DslHttpSampler;
+
+// import java.util.List;
+// import java.util.ArrayList;
+// import java.nio.file.Path;
+
+// public class TestExecutor {
+//     private final TestConfiguration config;
+    
+//     public TestExecutor(TestConfiguration config) {
+//         this.config = config;
+//     }
+    
+//     public ExecutionResult execute(ThreadGroupBuilder.ThreadGroupConfig threadConfig, 
+//                                   List<TestStep> testSteps) throws Exception {
+        
+//         // FIXED: Create list of TestPlanChild elements properly
+//         List<BaseThreadGroup.ThreadGroupChild> threadGroupChildren = new ArrayList<>();
+        
+//         for (TestStep step : testSteps) {
+//             // Add the HTTP sampler (which implements TestPlanChild)
+//             DslHttpSampler sampler = createSampler(step);
+//             threadGroupChildren.add(sampler);
+            
+//             // Add think time if specified
+//             if (!step.getThinkTime().isZero()) {
+//                 threadGroupChildren.add(constantTimer(step.getThinkTime()));
+//             }
+//         }
+        
+//         // Create thread group with proper array conversion
+//         var threadGroup = threadGroup(
+//             config.getTestName() + " - Users",
+//             threadConfig.getUsers(),
+//             threadConfig.getIterations(),
+//             threadGroupChildren.toArray(new DslTestPlan.TestPlanChild[0])
+//         );
+        
+//         // Build test plan components
+//         List<DslTestPlan.TestPlanChild> testPlanChildren = new ArrayList<>();
+//         testPlanChildren.add(threadGroup);
+        
+//         // Add JTL writer for results
+//         Path jtlFile = config.getResultsDirectory().resolve("results.jtl");
+//         testPlanChildren.add(
+//             jtlWriter(jtlFile.toString())
+//                 .withAllFields(true)
+//         );
+        
+//         // Add HTML reporter if configured
+//         if (config.shouldGenerateHtmlReport()) {
+//             Path htmlReportDir = config.getResultsDirectory().resolve("html-report");
+//             testPlanChildren.add(htmlReporter(htmlReportDir.toString()));
+//         }
+        
+//         // Create and run test plan
+//         DslTestPlan testPlan = testPlan(
+//             testPlanChildren.toArray(new DslTestPlan.TestPlanChild[0])
+//         );
+        
+//         // Execute test and wrap results
+//         TestPlanStats stats = testPlan.run();
+//         return new ExecutionResult(stats, config);
+//     }
+    
+//     private DslHttpSampler createSampler(TestStep step) {
+//         String fullUrl = config.getBaseUrl() + step.getEndpoint();
+        
+//         DslHttpSampler sampler = httpSampler(step.getName(), fullUrl)
+//             .connectionTimeout(config.getConnectionTimeout())
+//             .responseTimeout(config.getResponseTimeout());
+        
+//         // Add headers
+//         step.getHeaders().forEach(sampler::header);
+        
+//         // Handle different HTTP methods
+//         switch (step.getMethod().toUpperCase()) {
+//             case "POST":
+//                 if (step.getBody() != null) {
+//                     sampler.post(step.getBody(), step.getContentType());
+//                 }
+//                 break;
+//             case "PUT":
+//                 if (step.getBody() != null) {
+//                     sampler.put(step.getBody(), step.getContentType());
+//                 }
+//                 break;
+//             case "PATCH":
+//                 if (step.getBody() != null) {
+//                     sampler.patch(step.getBody(), step.getContentType());
+//                 }
+//                 break;
+//             case "DELETE":
+//                 sampler.method(DslHttpSampler.HttpMethod.DELETE);
+//                 break;
+//             case "GET":
+//             default:
+//                 // GET is default, no additional configuration needed
+//                 break;
+//         }
+        
+//         return sampler;
+//     }
+// }
+
+
+package org.perf.core;
+
+import static us.abstracta.jmeter.javadsl.JmeterDsl.*;
+
+import org.perf.model.ExecutionResult;
+import org.perf.model.TestStep;
+import org.perf.builder.ThreadGroupBuilder;
+
+import us.abstracta.jmeter.javadsl.core.DslTestPlan;
+import us.abstracta.jmeter.javadsl.core.TestPlanStats;
+import us.abstracta.jmeter.javadsl.http.DslHttpSampler;
+
+import java.util.List;
+import java.util.ArrayList;
+import java.nio.file.Path;
+
+public class TestExecutor {
+    private final TestConfiguration config;
+    
+    public TestExecutor(TestConfiguration config) {
+        this.config = config;
+    }
+    
+    // CRITICAL: Make sure this method signature exactly matches this:
+    public ExecutionResult execute(ThreadGroupBuilder.ThreadGroupConfig threadConfig, 
+                                  List<TestStep> testSteps) throws Exception {
+        
+        // Create list of TestPlanChild elements properly
+        List<DslTestPlan.TestPlanChild> threadGroupChildren = new ArrayList<>();
+        
+        for (TestStep step : testSteps) {
+            // Add the HTTP sampler (which implements TestPlanChild)
+            DslHttpSampler sampler = createSampler(step);
+            threadGroupChildren.add(sampler);
+            
+            // Add think time if specified
+            if (!step.getThinkTime().isZero()) {
+                threadGroupChildren.add(constantTimer(step.getThinkTime()));
+            }
+        }
+        
+        // Create thread group with proper array conversion
+        var threadGroup = threadGroup(
+            config.getTestName() + " - Users",
+            threadConfig.getUsers(),
+            threadConfig.getIterations(),
+            threadGroupChildren.toArray(new DslTestPlan.TestPlanChild[0])
+        );
+        
+        // Build test plan components
+        List<DslTestPlan.TestPlanChild> testPlanChildren = new ArrayList<>();
+        testPlanChildren.add(threadGroup);
+        
+        // Add JTL writer for results
+        Path jtlFile = config.getResultsDirectory().resolve("results.jtl");
+        testPlanChildren.add(
+            jtlWriter(jtlFile.toString())
+                .withAllFields(true)
+        );
+        
+        // Add HTML reporter if configured
+        if (config.shouldGenerateHtmlReport()) {
+            Path htmlReportDir = config.getResultsDirectory().resolve("html-report");
+            testPlanChildren.add(htmlReporter(htmlReportDir.toString()));
+        }
+        
+        // Create and run test plan
+        DslTestPlan testPlan = testPlan(
+            testPlanChildren.toArray(new DslTestPlan.TestPlanChild[0])
+        );
+        
+        // Execute test and wrap results
+        TestPlanStats stats = testPlan.run();
+        return new ExecutionResult(stats, config);
+    }
+    
+    private DslHttpSampler createSampler(TestStep step) {
+        String fullUrl = config.getBaseUrl() + step.getEndpoint();
+        
+        DslHttpSampler sampler = httpSampler(step.getName(), fullUrl)
+            .connectionTimeout(config.getConnectionTimeout())
+            .responseTimeout(config.getResponseTimeout());
+        
+        // Add headers
+        step.getHeaders().forEach(sampler::header);
+        
+        // Handle different HTTP methods
+        switch (step.getMethod().toUpperCase()) {
+            case "POST":
+                if (step.getBody() != null) {
+                    sampler.post(step.getBody(), step.getContentType());
+                }
+                break;
+            case "PUT":
+                if (step.getBody() != null) {
+                    sampler.put(step.getBody(), step.getContentType());
+                }
+                break;
+            case "PATCH":
+                if (step.getBody() != null) {
+                    sampler.patch(step.getBody(), step.getContentType());
+                }
+                break;
+            case "DELETE":
+                sampler.method(DslHttpSampler.HttpMethod.DELETE);
+                break;
+            case "GET":
+            default:
+                // GET is default, no additional configuration needed
+                break;
+        }
+        
+        return sampler;
+    }
+}
